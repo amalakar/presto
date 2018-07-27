@@ -29,6 +29,7 @@ public class HiveS3Module
         extends AbstractConfigurationAwareModule
 {
     private static final String EMR_FS_CLASS_NAME = "com.amazon.ws.emr.hadoop.fs.EmrFileSystem";
+    private static final String ALLUXIO_FS_CLASS_NAME = "alluxio.hadoop.FileSystem";
 
     private final String connectorId;
 
@@ -52,6 +53,10 @@ public class HiveS3Module
             validateEmrFsClass();
             binder.bind(S3ConfigurationUpdater.class).to(EmrFsS3ConfigurationUpdater.class).in(Scopes.SINGLETON);
         }
+        else if (type == S3FileSystemType.ALLUXIO) {
+            validateAlluxioFsClass();
+            binder.bind(S3ConfigurationUpdater.class).to(AlluxioFsS3ConfigurationUpdater.class).in(Scopes.SINGLETON);
+        }
         else {
             throw new RuntimeException("Unknown file system type: " + type);
         }
@@ -68,6 +73,17 @@ public class HiveS3Module
         }
     }
 
+    private static void validateAlluxioFsClass()
+    {
+        // verify that the class exists
+        try {
+            Class.forName(ALLUXIO_FS_CLASS_NAME, true, JavaUtils.getClassLoader());
+        }
+        catch (ClassNotFoundException e) {
+            throw new RuntimeException("Alluxio File System class not found: " + ALLUXIO_FS_CLASS_NAME, e);
+        }
+    }
+
     public static class EmrFsS3ConfigurationUpdater
             implements S3ConfigurationUpdater
     {
@@ -78,6 +94,19 @@ public class HiveS3Module
             config.set("fs.s3.impl", EMR_FS_CLASS_NAME);
             config.set("fs.s3a.impl", EMR_FS_CLASS_NAME);
             config.set("fs.s3n.impl", EMR_FS_CLASS_NAME);
+        }
+    }
+
+    public static class AlluxioFsS3ConfigurationUpdater
+            implements S3ConfigurationUpdater
+    {
+        @Override
+        public void updateConfiguration(Configuration config)
+        {
+            // re-map filesystem schemes to use the alluxio hdfs client
+            config.set("fs.s3.impl", ALLUXIO_FS_CLASS_NAME);
+            config.set("fs.s3a.impl", ALLUXIO_FS_CLASS_NAME);
+            config.set("fs.s3n.impl", ALLUXIO_FS_CLASS_NAME);
         }
     }
 }
